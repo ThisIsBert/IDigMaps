@@ -3,28 +3,32 @@ window.Polygons = (() => {
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
 
-    const drawControl = new L.Control.Draw({
-      edit: {
-        featureGroup: drawnItems,
-      },
-      draw: {
-        polygon: true,
-        marker: false,
-        polyline: false,
-        rectangle: false,
-        circle: false,
-        circlemarker: false,
-      },
-    });
-    map.addControl(drawControl);
+    if (L.Control?.Draw && L.Draw?.Event) {
+      const drawControl = new L.Control.Draw({
+        edit: {
+          featureGroup: drawnItems,
+        },
+        draw: {
+          polygon: true,
+          marker: false,
+          polyline: false,
+          rectangle: false,
+          circle: false,
+          circlemarker: false,
+        },
+      });
+      map.addControl(drawControl);
 
-    map.on(L.Draw.Event.CREATED, (e) => {
-      drawnItems.addLayer(e.layer);
-    });
+      map.on(L.Draw.Event.CREATED, (e) => {
+        drawnItems.addLayer(e.layer);
+      });
 
-    map.on(L.Draw.Event.DELETED, () => {
-      // no-op; layer group already updated
-    });
+      map.on(L.Draw.Event.DELETED, () => {
+        // no-op; layer group already updated
+      });
+    } else {
+      console.warn("Leaflet Draw is not available; polygon tools are disabled.");
+    }
 
     return {
       layerGroup: drawnItems,
