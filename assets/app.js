@@ -442,6 +442,7 @@
       state.transformMode = payload.transform?.mode || "affine";
       state.lambda = payload.transform?.lambda ?? 0.001;
       state.overlay = { ...state.overlay, ...(payload.overlay || {}) };
+      app.resetTransform();
       if (payload.polygons) {
         state.polygons.importGeoJSON(payload.polygons);
       }
@@ -466,6 +467,8 @@
       UI.updateOverlayDisplay(state.overlay.opacity, state.overlay.resolution);
       if (!state.overlay.visible) {
         state.map.removeLayer(state.overlayLayer);
+      } else if (!state.map.hasLayer(state.overlayLayer)) {
+        state.map.addLayer(state.overlayLayer);
       }
 
       app.updateUI();
