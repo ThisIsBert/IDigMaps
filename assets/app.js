@@ -290,10 +290,13 @@
         URL.revokeObjectURL(img.src);
       };
       img.onerror = () => {
-        state.image = null;
-        state.imageMeta = null;
-        UI.setImage(null);
-        UI.setImageMeta("No image loaded.");
+        if (!state.image) {
+          state.imageMeta = null;
+          UI.setImage(null);
+          UI.setImageMeta("No image loaded.");
+          state.overlayLayer.setImage(null);
+          app.resetTransform();
+        }
         UI.setImageHint("Image could not be loaded. Try a PNG or JPG file.");
         UI.setModeStatus("Image load failed.");
         URL.revokeObjectURL(img.src);
