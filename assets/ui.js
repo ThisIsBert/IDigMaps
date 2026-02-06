@@ -52,6 +52,7 @@ window.UI = (() => {
 
   const setImage = (img) => {
     state.image = img;
+    state.pickMarker = null;
     resetView();
   };
 
@@ -200,6 +201,7 @@ window.UI = (() => {
     elements.imageInput.addEventListener("change", (event) => {
       const file = event.target.files[0];
       if (file) app.loadImage(file);
+      event.target.value = "";
     });
 
     elements.transformMode.addEventListener("change", (event) => {
@@ -225,10 +227,6 @@ window.UI = (() => {
     elements.gcpToggle.addEventListener("change", (event) => app.toggleGcpLayer(event.target.checked));
     elements.polygonToggle.addEventListener("change", (event) => app.togglePolygonLayer(event.target.checked));
 
-    elements.importGcp.addEventListener("click", () => elements.gcpFileInput.click());
-    elements.gcpFileInput.addEventListener("change", (event) => app.importGcpFile(event));
-    elements.exportGcp.addEventListener("click", () => app.exportGcp());
-
     elements.exportGeojson.addEventListener("click", () => app.exportGeoJSON());
     elements.importGeojson.addEventListener("click", () => elements.geojsonFileInput.click());
     elements.geojsonFileInput.addEventListener("change", (event) => app.importGeoJSONFile(event));
@@ -247,9 +245,6 @@ window.UI = (() => {
     elements.modeStatus = document.getElementById("modeStatus");
     elements.startGcp = document.getElementById("startGcp");
     elements.gcpTable = document.getElementById("gcpTable");
-    elements.gcpFileInput = document.getElementById("gcpFileInput");
-    elements.importGcp = document.getElementById("importGcp");
-    elements.exportGcp = document.getElementById("exportGcp");
     elements.transformMode = document.getElementById("transformMode");
     elements.lambdaRange = document.getElementById("lambdaRange");
     elements.lambdaValue = document.getElementById("lambdaValue");

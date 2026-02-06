@@ -272,7 +272,9 @@
     },
 
     loadImage(file) {
+      if (!file) return;
       const img = new Image();
+      UI.setModeStatus("Loading image...");
       img.onload = () => {
         state.image = img;
         state.imageMeta = { name: file.name, width: img.width, height: img.height };
@@ -284,6 +286,17 @@
         app.checkCanvasSecurity();
         app.updateUI();
         app.saveProject();
+        UI.setModeStatus("Image loaded. Add a GCP to start.");
+        URL.revokeObjectURL(img.src);
+      };
+      img.onerror = () => {
+        state.image = null;
+        state.imageMeta = null;
+        UI.setImage(null);
+        UI.setImageMeta("No image loaded.");
+        UI.setImageHint("Image could not be loaded. Try a PNG or JPG file.");
+        UI.setModeStatus("Image load failed.");
+        URL.revokeObjectURL(img.src);
       };
       img.src = URL.createObjectURL(file);
     },
@@ -291,6 +304,7 @@
     clearImage() {
       state.image = null;
       state.imageMeta = null;
+      app.cancelPick();
       UI.setImage(null);
       UI.setImageMeta("No image loaded.");
       UI.setImageHint("");
@@ -346,38 +360,6 @@
         }).bindTooltip(`GCP ${index + 1}`);
         state.gcpLayer.addLayer(marker);
       });
-    },
-
-    exportGcp() {
-      const payload = JSON.stringify(state.gcps, null, 2);
-      app.downloadFile("gcps.json", payload);
-    },
-
-    importGcpFile(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const data = JSON.parse(reader.result);
-          if (Array.isArray(data)) {
-            state.gcps = data.map((item) => ({
-              id: item.id || crypto.randomUUID(),
-              u: item.u,
-              v: item.v,
-              lat: item.lat,
-              lng: item.lng,
-              residual: null,
-            }));
-            app.resetTransform();
-            app.updateUI();
-            app.saveProject();
-          }
-        } catch (error) {
-          UI.setModeStatus("Invalid GCP JSON.");
-        }
-      };
-      reader.readAsText(file);
     },
 
     exportGeoJSON() {
