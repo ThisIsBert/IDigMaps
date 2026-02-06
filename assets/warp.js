@@ -1,0 +1,163 @@
+window.Warp = (() => {
+  const triangleTransform = (ctx, src, dst) => {
+    const [x0, y0, x1, y1, x2, y2] = dst;
+    const [u0, v0, u1, v1, u2, v2] = src;
+
+    const denom = u0 * (v1 - v2) + u1 * (v2 - v0) + u2 * (v0 - v1);
+    if (Math.abs(denom) < 1e-12) return false;
+
+    const a = (x0 * (v1 - v2) + x1 * (v2 - v0) + x2 * (v0 - v1)) / denom;
+    const b = (x0 * (u2 - u1) + x1 * (u0 - u2) + x2 * (u1 - u0)) / denom;
+    const c = (x0 * (u1 * v2 - u2 * v1) + x1 * (u2 * v0 - u0 * v2) + x2 * (u0 * v1 - u1 * v0)) / denom;
+
+    const d = (y0 * (v1 - v2) + y1 * (v2 - v0) + y2 * (v0 - v1)) / denom;
+    const e = (y0 * (u2 - u1) + y1 * (u0 - u2) + y2 * (u1 - u0)) / denom;
+    const f = (y0 * (u1 * v2 - u2 * v1) + y1 * (u2 * v0 - u0 * v2) + y2 * (u0 * v1 - u1 * v0)) / denom;
+
+    ctx.setTransform(a, d, b, e, c, f);
+    return true;
+  };
+
+  class WarpedImageLayer extends L.Layer {
+    constructor(options = {}) {
+      super();
+      this.options = options;
+      this.image = null;
+      this.transform = null;
+      this.gridSize = options.gridSize || 40;
+      this.opacity = options.opacity || 0.8;
+      this.showMesh = false;
+      this._frame = null;
+    }
+
+    onAdd(map) {
+      this._map = map;
+      this._canvas = L.DomUtil.create("canvas", "warped-image-layer");
+      this._canvas.style.position = "absolute";
+      this._canvas.style.top = "0";
+      this._canvas.style.left = "0";
+      this._canvas.style.pointerEvents = "none";
+      map.getPanes().overlayPane.appendChild(this._canvas);
+      map.on("move zoom resize", this.requestRedraw, this);
+      this.requestRedraw();
+    }
+
+    onRemove(map) {
+      map.off("move zoom resize", this.requestRedraw, this);
+      if (this._canvas && this._canvas.parentNode) {
+        this._canvas.parentNode.removeChild(this._canvas);
+      }
+    }
+
+    setImage(image) {
+      this.image = image;
+      this.requestRedraw();
+    }
+
+    setTransform(transform) {
+      this.transform = transform;
+      this.requestRedraw();
+    }
+
+    setGridSize(size) {
+      this.gridSize = size;
+      this.requestRedraw();
+    }
+
+    setOpacity(opacity) {
+      this.opacity = opacity;
+      this.requestRedraw();
+    }
+
+    setShowMesh(show) {
+      this.showMesh = show;
+      this.requestRedraw();
+    }
+
+    requestRedraw() {
+      if (!this._map) return;
+      if (this._frame) return;
+      this._frame = requestAnimationFrame(() => {
+        this._frame = null;
+        this._redraw();
+      });
+    }
+
+    _redraw() {
+      const map = this._map;
+      if (!map || !this._canvas) return;
+      const size = map.getSize();
+      this._canvas.width = size.x;
+      this._canvas.height = size.y;
+      const ctx = this._canvas.getContext("2d");
+      ctx.clearRect(0, 0, size.x, size.y);
+      if (!this.image || !this.transform || !this.transform.eval) return;
+
+      ctx.globalAlpha = this.opacity;
+      const cols = this.gridSize;
+      const rows = this.gridSize;
+      const w = this.image.width;
+      const h = this.image.height;
+
+      const cellW = w / cols;
+      const cellH = h / rows;
+
+      for (let i = 0; i < cols; i += 1) {
+        for (let j = 0; j < rows; j += 1) {
+          const u0 = i * cellW;
+          const v0 = j * cellH;
+          const u1 = (i + 1) * cellW;
+          const v1 = (j + 1) * cellH;
+
+          const p00 = this._projectPoint(u0, v0);
+          const p10 = this._projectPoint(u1, v0);
+          const p01 = this._projectPoint(u0, v1);
+          const p11 = this._projectPoint(u1, v1);
+          if (!(p00 && p10 && p01 && p11)) continue;
+
+          this._drawTriangle(ctx, [u0, v0, u1, v0, u1, v1], [p00, p10, p11]);
+          this._drawTriangle(ctx, [u0, v0, u1, v1, u0, v1], [p00, p11, p01]);
+        }
+      }
+    }
+
+    _projectPoint(u, v) {
+      const result = this.transform.eval(u, v);
+      if (!result) return null;
+      const latlng = this.transform.toLatLng(result.x, result.y);
+      return this._map.latLngToContainerPoint(latlng);
+    }
+
+    _drawTriangle(ctx, src, dstPoints) {
+      const dst = [
+        dstPoints[0].x,
+        dstPoints[0].y,
+        dstPoints[1].x,
+        dstPoints[1].y,
+        dstPoints[2].x,
+        dstPoints[2].y,
+      ];
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(dst[0], dst[1]);
+      ctx.lineTo(dst[2], dst[3]);
+      ctx.lineTo(dst[4], dst[5]);
+      ctx.closePath();
+      ctx.clip();
+      if (!triangleTransform(ctx, src, dst)) {
+        ctx.restore();
+        return;
+      }
+      ctx.drawImage(this.image, 0, 0);
+      if (this.showMesh) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.2)";
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  return { WarpedImageLayer };
+})();
