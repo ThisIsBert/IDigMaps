@@ -274,6 +274,7 @@
     loadImage(file) {
       if (!file) return;
       const img = new Image();
+      const reader = new FileReader();
       UI.setModeStatus("Loading image...");
       img.onload = () => {
         state.image = img;
@@ -287,7 +288,6 @@
         app.updateUI();
         app.saveProject();
         UI.setModeStatus("Image loaded. Add a GCP to start.");
-        URL.revokeObjectURL(img.src);
       };
       img.onerror = () => {
         if (!state.image) {
@@ -299,9 +299,15 @@
         }
         UI.setImageHint("Image could not be loaded. Try a PNG or JPG file.");
         UI.setModeStatus("Image load failed.");
-        URL.revokeObjectURL(img.src);
       };
-      img.src = URL.createObjectURL(file);
+      reader.onload = () => {
+        img.src = reader.result;
+      };
+      reader.onerror = () => {
+        UI.setImageHint("Image could not be read. Try a PNG or JPG file.");
+        UI.setModeStatus("Image load failed.");
+      };
+      reader.readAsDataURL(file);
     },
 
     clearImage() {
