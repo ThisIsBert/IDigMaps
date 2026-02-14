@@ -1,6 +1,13 @@
 window.GCP = (() => {
+  const createId = () => {
+    if (window.crypto?.randomUUID) {
+      return window.crypto.randomUUID();
+    }
+    return `gcp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  };
+
   const create = (u, v, lat, lng) => ({
-    id: crypto.randomUUID(),
+    id: createId(),
     u,
     v,
     lat,

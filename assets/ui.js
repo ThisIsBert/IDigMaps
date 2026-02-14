@@ -3,6 +3,8 @@ window.UI = (() => {
     canvas: null,
     ctx: null,
     image: null,
+    imageGcps: [],
+    highlightedGcpId: null,
     scale: 1,
     offsetX: 0,
     offsetY: 0,
@@ -15,6 +17,20 @@ window.UI = (() => {
   const elements = {};
 
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+  const eventToCanvasPoint = (event) => {
+    const { canvas } = state;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      return { x: 0, y: 0 };
+    }
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY,
+    };
+  };
 
   const screenToImage = (x, y) => {
     const u = (x - state.offsetX) / state.scale;
@@ -40,6 +56,19 @@ window.UI = (() => {
     ctx.drawImage(state.image, 0, 0);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
+    state.imageGcps.forEach((gcp, index) => {
+      const x = gcp.u * state.scale + state.offsetX;
+      const y = gcp.v * state.scale + state.offsetY;
+      const highlighted = gcp.id === state.highlightedGcpId;
+      ctx.fillStyle = highlighted ? "#b60000" : "#0063b1";
+      ctx.beginPath();
+      ctx.arc(x, y, highlighted ? 4.5 : 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#111";
+      ctx.font = "11px Segoe UI, sans-serif";
+      ctx.fillText(String(index + 1), x + 6, y - 6);
+    });
+
     if (state.pickMarker) {
       const x = state.pickMarker.u * state.scale + state.offsetX;
       const y = state.pickMarker.v * state.scale + state.offsetY;
@@ -54,6 +83,16 @@ window.UI = (() => {
     state.image = img;
     state.pickMarker = null;
     resetView();
+  };
+
+  const setImageGcps = (gcps, highlightedId = null) => {
+    state.imageGcps = Array.isArray(gcps)
+      ? gcps
+        .filter((gcp) => Number.isFinite(gcp.u) && Number.isFinite(gcp.v))
+        .map((gcp) => ({ id: gcp.id, u: gcp.u, v: gcp.v }))
+      : [];
+    state.highlightedGcpId = highlightedId;
+    drawImagePicker();
   };
 
   const resetView = () => {
@@ -77,14 +116,16 @@ window.UI = (() => {
   const attachCanvasEvents = (app) => {
     const { canvas } = state;
     canvas.addEventListener("mousedown", (event) => {
+      const point = eventToCanvasPoint(event);
       state.dragging = true;
-      state.dragStart = { x: event.offsetX, y: event.offsetY, ox: state.offsetX, oy: state.offsetY };
+      state.dragStart = { x: point.x, y: point.y, ox: state.offsetX, oy: state.offsetY };
     });
 
     canvas.addEventListener("mousemove", (event) => {
       if (!state.dragging) return;
-      const dx = event.offsetX - state.dragStart.x;
-      const dy = event.offsetY - state.dragStart.y;
+      const point = eventToCanvasPoint(event);
+      const dx = point.x - state.dragStart.x;
+      const dy = point.y - state.dragStart.y;
       state.offsetX = state.dragStart.ox + dx;
       state.offsetY = state.dragStart.oy + dy;
       drawImagePicker();
@@ -102,10 +143,11 @@ window.UI = (() => {
       if (!state.image) return;
       event.preventDefault();
       const zoom = event.deltaY < 0 ? 1.1 : 0.9;
-      const { u, v } = screenToImage(event.offsetX, event.offsetY);
+      const point = eventToCanvasPoint(event);
+      const { u, v } = screenToImage(point.x, point.y);
       const newScale = clamp(state.scale * zoom, 0.1, 10);
-      state.offsetX = event.offsetX - u * newScale;
-      state.offsetY = event.offsetY - v * newScale;
+      state.offsetX = point.x - u * newScale;
+      state.offsetY = point.y - v * newScale;
       state.scale = newScale;
       drawImagePicker();
     });
@@ -116,7 +158,8 @@ window.UI = (() => {
         app.setModeStatus("Load an image before picking image points.");
         return;
       }
-      const { u, v } = screenToImage(event.offsetX, event.offsetY);
+      const point = eventToCanvasPoint(event);
+      const { u, v } = screenToImage(point.x, point.y);
       const clampedU = clamp(u, 0, state.image.width);
       const clampedV = clamp(v, 0, state.image.height);
       state.pickMarker = { u: clampedU, v: clampedV };
@@ -286,6 +329,7 @@ window.UI = (() => {
     setImageHint,
     updateTransformMetrics,
     updateOverlayDisplay,
+    setImageGcps,
     setPickMarker(marker) {
       state.pickMarker = marker;
       drawImagePicker();

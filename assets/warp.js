@@ -87,8 +87,14 @@ window.Warp = (() => {
       const map = this._map;
       if (!map || !this._canvas) return;
       const size = map.getSize();
-      this._canvas.width = size.x;
-      this._canvas.height = size.y;
+      const topLeft = map.containerPointToLayerPoint([0, 0]);
+      L.DomUtil.setPosition(this._canvas, topLeft);
+      if (this._canvas.width !== size.x) {
+        this._canvas.width = size.x;
+      }
+      if (this._canvas.height !== size.y) {
+        this._canvas.height = size.y;
+      }
       const ctx = this._canvas.getContext("2d");
       ctx.clearRect(0, 0, size.x, size.y);
       if (!this.image || !this.transform || !this.transform.eval) return;
@@ -101,6 +107,12 @@ window.Warp = (() => {
 
       const cellW = w / cols;
       const cellH = h / rows;
+      const projectedGrid = Array.from({ length: cols + 1 }, () => Array(rows + 1).fill(null));
+      for (let i = 0; i <= cols; i += 1) {
+        for (let j = 0; j <= rows; j += 1) {
+          projectedGrid[i][j] = this._projectPoint(i * cellW, j * cellH);
+        }
+      }
 
       for (let i = 0; i < cols; i += 1) {
         for (let j = 0; j < rows; j += 1) {
@@ -109,11 +121,18 @@ window.Warp = (() => {
           const u1 = (i + 1) * cellW;
           const v1 = (j + 1) * cellH;
 
-          const p00 = this._projectPoint(u0, v0);
-          const p10 = this._projectPoint(u1, v0);
-          const p01 = this._projectPoint(u0, v1);
-          const p11 = this._projectPoint(u1, v1);
+          const p00 = projectedGrid[i][j];
+          const p10 = projectedGrid[i + 1][j];
+          const p01 = projectedGrid[i][j + 1];
+          const p11 = projectedGrid[i + 1][j + 1];
           if (!(p00 && p10 && p01 && p11)) continue;
+          const minX = Math.min(p00.x, p10.x, p01.x, p11.x);
+          const maxX = Math.max(p00.x, p10.x, p01.x, p11.x);
+          const minY = Math.min(p00.y, p10.y, p01.y, p11.y);
+          const maxY = Math.max(p00.y, p10.y, p01.y, p11.y);
+          if (maxX < 0 || maxY < 0 || minX > size.x || minY > size.y) {
+            continue;
+          }
 
           this._drawTriangle(ctx, [u0, v0, u1, v0, u1, v1], [p00, p10, p11]);
           this._drawTriangle(ctx, [u0, v0, u1, v1, u0, v1], [p00, p11, p01]);
@@ -125,6 +144,9 @@ window.Warp = (() => {
       const result = this.transform.eval(u, v);
       if (!result) return null;
       const latlng = this.transform.toLatLng(result.x, result.y);
+      if (!Number.isFinite(latlng.lat) || !Number.isFinite(latlng.lng)) {
+        return null;
+      }
       return this._map.latLngToContainerPoint(latlng);
     }
 

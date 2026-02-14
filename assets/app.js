@@ -91,6 +91,12 @@
       UI.setModeStatus(text);
     },
 
+    updateMapCursor() {
+      const container = state.map?.getContainer?.();
+      if (!container) return;
+      container.classList.toggle("map-crosshair", state.pick.mode === "map");
+    },
+
     startNewGcp() {
       if (!state.image) {
         UI.setModeStatus("Load an image before adding GCPs.");
@@ -99,6 +105,7 @@
       state.pick.mode = "image";
       state.pick.pending = { type: "new" };
       state.pick.tempImage = null;
+      app.updateMapCursor();
       UI.setModeStatus("Click the image picker to choose the image point.");
     },
 
@@ -106,6 +113,7 @@
       state.pick.mode = "image";
       state.pick.pending = { type: "edit-image", id };
       state.pick.tempImage = null;
+      app.updateMapCursor();
       UI.setModeStatus("Re-pick the image point.");
     },
 
@@ -113,6 +121,7 @@
       state.pick.mode = "map";
       state.pick.pending = { type: "edit-map", id };
       state.pick.tempImage = null;
+      app.updateMapCursor();
       UI.setModeStatus("Click the map to re-pick the map point.");
     },
 
@@ -120,17 +129,65 @@
       state.pick.mode = "idle";
       state.pick.pending = null;
       state.pick.tempImage = null;
+      app.updateMapCursor();
       UI.setModeStatus("Pick canceled.");
     },
 
     onImagePicked(u, v) {
+      if (!state.pick.pending) {
+        UI.setModeStatus("Start a new GCP first.");
+        return;
+      }
+      if (state.pick.pending.type === "edit-image") {
+        const gcp = state.gcps.find((item) => item.id === state.pick.pending.id);
+        if (!gcp) {
+          UI.setModeStatus("GCP not found.");
+          app.cancelPick();
+          return;
+        }
+        gcp.u = u;
+        gcp.v = v;
+        state.pick.mode = "idle";
+        state.pick.pending = null;
+        state.pick.tempImage = null;
+        app.updateMapCursor();
+        UI.setModeStatus("Image point updated.");
+        app.resetTransform();
+        app.updateUI();
+        app.saveProject();
+        return;
+      }
       state.pick.tempImage = { u, v };
       state.pick.mode = "map";
+      app.updateMapCursor();
       UI.setModeStatus("Now click on the map to set the GCP location.");
     },
 
     onMapPicked(latlng) {
-      if (!state.pick.pending || !state.pick.tempImage) {
+      if (!state.pick.pending) {
+        UI.setModeStatus("Start a new GCP first.");
+        return;
+      }
+      if (state.pick.pending.type === "edit-map") {
+        const gcp = state.gcps.find((item) => item.id === state.pick.pending.id);
+        if (!gcp) {
+          UI.setModeStatus("GCP not found.");
+          app.cancelPick();
+          return;
+        }
+        gcp.lat = latlng.lat;
+        gcp.lng = latlng.lng;
+        state.pick.mode = "idle";
+        state.pick.pending = null;
+        state.pick.tempImage = null;
+        app.updateMapCursor();
+        UI.setModeStatus("Map point updated.");
+        app.resetTransform();
+        app.updateUI();
+        app.saveProject();
+        return;
+      }
+      if (!state.pick.tempImage) {
         UI.setModeStatus("Pick an image point first.");
         return;
       }
@@ -138,24 +195,11 @@
       if (state.pick.pending.type === "new") {
         state.gcps.push(GCP.create(u, v, latlng.lat, latlng.lng));
       }
-      if (state.pick.pending.type === "edit-image") {
-        const gcp = state.gcps.find((item) => item.id === state.pick.pending.id);
-        if (gcp) {
-          gcp.u = u;
-          gcp.v = v;
-        }
-      }
-      if (state.pick.pending.type === "edit-map") {
-        const gcp = state.gcps.find((item) => item.id === state.pick.pending.id);
-        if (gcp) {
-          gcp.lat = latlng.lat;
-          gcp.lng = latlng.lng;
-        }
-      }
 
       state.pick.mode = "idle";
       state.pick.pending = null;
       state.pick.tempImage = null;
+      app.updateMapCursor();
       UI.setModeStatus("GCP saved.");
       app.resetTransform();
       app.updateUI();
@@ -335,11 +379,12 @@
 
     updateUI() {
       const minAffine = 3;
-      const minTps = 3;
+      const minTps = 6;
       const canCompute = state.transformMode === "affine"
         ? state.gcps.length >= minAffine
         : state.gcps.length >= minTps;
       UI.renderGcpTable(state.gcps, state.lastMetrics);
+      UI.setImageGcps(state.gcps, state.pick.pending?.type === "edit-image" ? state.pick.pending.id : null);
       UI.updateTransformMetrics(state.lastMetrics);
       if (!canCompute) {
         UI.setModeStatus(

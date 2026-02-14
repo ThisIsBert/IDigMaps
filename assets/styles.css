@@ -28,6 +28,11 @@ body {
   height: 100%;
 }
 
+.map.map-crosshair,
+.map.map-crosshair .leaflet-interactive {
+  cursor: crosshair;
+}
+
 .panel {
   overflow-y: auto;
   background: #fff;
