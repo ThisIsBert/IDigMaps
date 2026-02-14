@@ -6,7 +6,7 @@
     gcps: [],
     transform: null,
     transformMode: "affine",
-    lambda: 0.001,
+    lambda: 0,
     overlay: {
       visible: true,
       opacity: 0.8,
@@ -61,6 +61,7 @@
         gridSize: state.overlay.resolution,
         opacity: state.overlay.opacity,
       });
+      state.overlayLayer.setControlPoints(state.gcps);
       state.overlayLayer.addTo(state.map);
 
       UI.init(app);
@@ -306,6 +307,7 @@
       }
 
       state.transform = transform;
+      state.overlayLayer.setControlPoints(state.gcps);
       state.overlayLayer.setTransform(transform);
       const metrics = GCP.computeResiduals(state.gcps, transform);
       state.lastMetrics = metrics;
@@ -383,6 +385,7 @@
       const canCompute = state.transformMode === "affine"
         ? state.gcps.length >= minAffine
         : state.gcps.length >= minTps;
+      state.overlayLayer.setControlPoints(state.gcps);
       UI.renderGcpTable(state.gcps, state.lastMetrics);
       UI.setImageGcps(state.gcps, state.pick.pending?.type === "edit-image" ? state.pick.pending.id : null);
       UI.updateTransformMetrics(state.lastMetrics);
@@ -476,7 +479,7 @@
       state.gcps = Array.isArray(payload.gcps) ? payload.gcps : [];
       state.lastMetrics = null;
       state.transformMode = payload.transform?.mode || "affine";
-      state.lambda = payload.transform?.lambda ?? 0.001;
+      state.lambda = payload.transform?.lambda ?? 0;
       state.overlay = { ...state.overlay, ...(payload.overlay || {}) };
       app.resetTransform();
       if (payload.polygons) {
@@ -500,6 +503,7 @@
       state.overlayLayer.setOpacity(state.overlay.opacity);
       state.overlayLayer.setGridSize(state.overlay.resolution);
       state.overlayLayer.setShowMesh(state.overlay.mesh);
+      state.overlayLayer.setControlPoints(state.gcps);
       UI.updateOverlayDisplay(state.overlay.opacity, state.overlay.resolution);
       if (!state.overlay.visible) {
         state.map.removeLayer(state.overlayLayer);

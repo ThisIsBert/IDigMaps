@@ -24,6 +24,7 @@ window.Warp = (() => {
       this.options = options;
       this.image = null;
       this.transform = null;
+      this.controlPoints = [];
       this.gridSize = options.gridSize || 40;
       this.opacity = options.opacity || 0.8;
       this.showMesh = false;
@@ -56,6 +57,11 @@ window.Warp = (() => {
 
     setTransform(transform) {
       this.transform = transform;
+      this.requestRedraw();
+    }
+
+    setControlPoints(points) {
+      this.controlPoints = Array.isArray(points) ? points : [];
       this.requestRedraw();
     }
 
@@ -101,25 +107,24 @@ window.Warp = (() => {
 
       ctx.globalAlpha = this.opacity;
       const cols = this.gridSize;
-      const rows = this.gridSize;
       const w = this.image.width;
       const h = this.image.height;
 
-      const cellW = w / cols;
-      const cellH = h / rows;
-      const projectedGrid = Array.from({ length: cols + 1 }, () => Array(rows + 1).fill(null));
-      for (let i = 0; i <= cols; i += 1) {
-        for (let j = 0; j <= rows; j += 1) {
-          projectedGrid[i][j] = this._projectPoint(i * cellW, j * cellH);
+      const uBreaks = this._buildBreaks(w, cols, this.controlPoints.map((point) => point.u));
+      const vBreaks = this._buildBreaks(h, cols, this.controlPoints.map((point) => point.v));
+      const projectedGrid = Array.from({ length: uBreaks.length }, () => Array(vBreaks.length).fill(null));
+      for (let i = 0; i < uBreaks.length; i += 1) {
+        for (let j = 0; j < vBreaks.length; j += 1) {
+          projectedGrid[i][j] = this._projectPoint(uBreaks[i], vBreaks[j]);
         }
       }
 
-      for (let i = 0; i < cols; i += 1) {
-        for (let j = 0; j < rows; j += 1) {
-          const u0 = i * cellW;
-          const v0 = j * cellH;
-          const u1 = (i + 1) * cellW;
-          const v1 = (j + 1) * cellH;
+      for (let i = 0; i < uBreaks.length - 1; i += 1) {
+        for (let j = 0; j < vBreaks.length - 1; j += 1) {
+          const u0 = uBreaks[i];
+          const v0 = vBreaks[j];
+          const u1 = uBreaks[i + 1];
+          const v1 = vBreaks[j + 1];
 
           const p00 = projectedGrid[i][j];
           const p10 = projectedGrid[i + 1][j];
@@ -138,6 +143,26 @@ window.Warp = (() => {
           this._drawTriangle(ctx, [u0, v0, u1, v1, u0, v1], [p00, p11, p01]);
         }
       }
+    }
+
+    _buildBreaks(maxValue, segments, extras) {
+      const values = [0, maxValue];
+      for (let i = 1; i < segments; i += 1) {
+        values.push((i * maxValue) / segments);
+      }
+      extras.forEach((value) => {
+        if (!Number.isFinite(value)) return;
+        values.push(Math.min(Math.max(value, 0), maxValue));
+      });
+      values.sort((a, b) => a - b);
+      const unique = [];
+      const epsilon = 1e-6;
+      values.forEach((value) => {
+        if (!unique.length || Math.abs(value - unique[unique.length - 1]) > epsilon) {
+          unique.push(value);
+        }
+      });
+      return unique;
     }
 
     _projectPoint(u, v) {
