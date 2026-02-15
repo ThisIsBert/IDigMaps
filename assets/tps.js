@@ -40,17 +40,35 @@ window.TPS = (() => {
 
   const U = (r2) => r2 * Math.log(r2 + EPS);
 
+  const estimateRadialScale = (points) => {
+    const distances = [];
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = i + 1; j < points.length; j += 1) {
+        const du = points[i].u - points[j].u;
+        const dv = points[i].v - points[j].v;
+        const r2 = du * du + dv * dv;
+        if (r2 > EPS) {
+          distances.push(r2);
+        }
+      }
+    }
+    if (!distances.length) return 1;
+    distances.sort((a, b) => a - b);
+    return distances[Math.floor(distances.length / 2)];
+  };
+
   const buildTPS = (points, lambda = 0) => {
     const n = points.length;
     const dim = n + 3;
     const K = toMatrix(dim, 0);
+    const radialScale = estimateRadialScale(points);
 
     for (let i = 0; i < n; i += 1) {
       for (let j = 0; j < n; j += 1) {
         const dx = points[i].u - points[j].u;
         const dy = points[i].v - points[j].v;
         const r2 = dx * dx + dy * dy;
-        K[i][j] = U(r2);
+        K[i][j] = U(r2 / radialScale);
       }
       K[i][i] += lambda;
       K[i][n] = 1;
@@ -75,7 +93,7 @@ window.TPS = (() => {
       return null;
     }
 
-    return { coeffX, coeffY, points };
+    return { coeffX, coeffY, points, radialScale };
   };
 
   const evalTPS = (model, u, v) => {
@@ -87,7 +105,7 @@ window.TPS = (() => {
       const dx = u - model.points[i].u;
       const dy = v - model.points[i].v;
       const r2 = dx * dx + dy * dy;
-      const basis = U(r2);
+      const basis = U(r2 / (model.radialScale || 1));
       x += model.coeffX[i] * basis;
       y += model.coeffY[i] * basis;
     }
